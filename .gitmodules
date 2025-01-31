@@ -4,3 +4,6 @@
 [submodule "lib/halmos-cheatcodes"]
 	path = lib/halmos-cheatcodes
 	url = https://github.com/a16z/halmos-cheatcodes.git
+[submodule "lib/superchain-async"]
+	path = lib/superchain-async
+	url = https://github.com/ben-chain/superchain-async.git

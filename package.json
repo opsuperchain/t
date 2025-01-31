@@ -17,6 +17,8 @@
     "test:forge:integration": "FOUNDRY_MATCH_CONTRACT=IntegrationTest yarn test:forge",
     "test:hardhat": "npx hardhat test",
     "test:halmos": "FOUNDRY_PROFILE=test halmos",
+    "test:interop": "vitest run",
+    "host-supersim": "supersim --interop.autorelay",
     "lint": "yarn lint:forge && yarn lint:hardhat",
     "lint:forge": "forge fmt --check",
     "lint:hardhat": "prettier --check test/hardhat",
@@ -28,7 +30,8 @@
   "dependencies": {
     "ethers": "^6.7.1",
     "ethers-maths": "^4.0.2",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "supersim": "^0.0.7"
   },
   "devDependencies": {
     "@commitlint/cli": "^17.7.1",
@@ -53,9 +56,11 @@
     "lint-staged": "^14.0.1",
     "prettier": "^3.0.2",
     "solidity-coverage": "^0.8.4",
+    "superchain-starter": "^0.0.7",
     "ts-node": "^10.9.1",
     "typechain": "^8.3.1",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "vitest": "^3.0.4"
   },
   "lint-staged": {
     "*.sol": "forge fmt",

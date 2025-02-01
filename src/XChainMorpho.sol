@@ -4,12 +4,19 @@ pragma solidity 0.8.19;
 import {AsyncEnabled} from "lib/superchain-async/src/AsyncEnabled.sol";
 import {ISuperchainTokenBridge} from "interop-lib/interfaces/ISuperchainTokenBridge.sol";
 import {IL2ToL2CrossDomainMessenger} from "interop-lib/interfaces/IL2ToL2CrossDomainMessenger.sol";
-import {IRemoteMorpho, Promise} from "./interfaces/IMorpho.sol";
 import {EventsLib} from "./libraries/EventsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {SafeTransferLib} from "./libraries/SafeTransferLib.sol";
 import {IMorphoFlashLoanCallback} from "./interfaces/IMorphoCallbacks.sol";
+
+interface IRemoteMorpho {
+    function await(uint256, address, address, uint256, bytes memory) external returns (Promise);
+}
+
+interface Promise {
+    function then(function(uint256, address, address, uint256, bytes memory) external) external;
+}
 
 interface IXChainMorpho {
     function initiateCrosschainFlashLoan(address token, uint256 destinationChain, uint256 assets, bytes calldata data)

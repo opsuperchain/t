@@ -10,7 +10,7 @@ import {IERC20} from "./interfaces/IERC20.sol";
 import {SafeTransferLib} from "./libraries/SafeTransferLib.sol";
 import {IMorphoFlashLoanCallback} from "./interfaces/IMorphoCallbacks.sol";
 
-interface IRemoteMorpho {
+interface IRemoteXChainMorpho {
     function await(uint256, address, address, uint256, bytes memory) external returns (Promise);
 }
 
@@ -39,7 +39,7 @@ contract XChainMorpho is AsyncEnabled {
         // Send tokens to Morpho on destination chain
         bridge.sendERC20(address(token), address(this), assets, destinationChain);
 
-        IRemoteMorpho remote = IRemoteMorpho(getAsyncProxy(address(this), destinationChain));
+        IRemoteXChainMorpho remote = IRemoteXChainMorpho(getAsyncProxy(address(this), destinationChain));
         Promise initiateFlashLoanPromise = remote.await(destinationChain, msg.sender, token, assets, data);
         // send message to the destination chain to execute the flash loan
         initiateFlashLoanPromise.then(this.executeFlashLoanOnRemoteChain);
@@ -71,7 +71,6 @@ contract XChainMorpho is AsyncEnabled {
     function xChainFlashLoan(uint256 sourceChain, address borrower, address token, uint256 assets, bytes calldata data)
         external
     {
-        // TODO have this call the morpho parent contract
         require(assets != 0, ErrorsLib.ZERO_ASSETS);
 
         emit EventsLib.FlashLoan(borrower, token, assets);

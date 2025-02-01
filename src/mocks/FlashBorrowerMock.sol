@@ -13,7 +13,7 @@ contract FlashBorrowerMock is IMorphoFlashLoanCallback {
     }
 
     function flashLoan(address token, uint256 assets, bytes calldata data) external {
-        MORPHO.flashLoan(address(this), token, assets, data);
+        MORPHO.flashLoan(token, assets, data);
     }
 
     function onMorphoFlashLoan(uint256 assets, bytes calldata data) external {

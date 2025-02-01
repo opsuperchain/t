@@ -265,12 +265,11 @@ interface IMorphoBase {
     /// @dev Warning: Not ERC-3156 compliant but compatibility is easily reached:
     /// - `flashFee` is zero.
     /// - `maxFlashLoan` is the token's balance of this contract.
-    /// - The receiver of `assets` is the borrower.
-    /// @param borrower The address of the borrower.
+    /// - The receiver of `assets` is the caller.
     /// @param token The token to flash loan.
     /// @param assets The amount of assets to flash loan.
     /// @param data Arbitrary data to pass to the `onMorphoFlashLoan` callback.
-    function flashLoan(address borrower, address token, uint256 assets, bytes calldata data) external;
+    function flashLoan(address token, uint256 assets, bytes calldata data) external;
 
     /// @notice Sets the authorization for `authorized` to manage `msg.sender`'s positions.
     /// @param authorized The authorized address.

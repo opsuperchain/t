@@ -419,16 +419,16 @@ contract Morpho is IMorphoStaticTyping {
     /* FLASH LOANS */
 
     /// @inheritdoc IMorphoBase
-    function flashLoan(address borrower, address token, uint256 assets, bytes calldata data) external {
+    function flashLoan(address token, uint256 assets, bytes calldata data) external {
         require(assets != 0, ErrorsLib.ZERO_ASSETS);
 
-        emit EventsLib.FlashLoan(borrower, token, assets);
+        emit EventsLib.FlashLoan(msg.sender, token, assets);
 
-        IERC20(token).safeTransfer(borrower, assets);
+        IERC20(token).safeTransfer(msg.sender, assets);
 
-        IMorphoFlashLoanCallback(borrower).onMorphoFlashLoan(assets, data);
+        IMorphoFlashLoanCallback(msg.sender).onMorphoFlashLoan(assets, data);
 
-        IERC20(token).safeTransferFrom(borrower, address(this), assets);
+        IERC20(token).safeTransferFrom(msg.sender, address(this), assets);
     }
 
     /* AUTHORIZATION */

@@ -2,9 +2,8 @@
 pragma solidity ^0.8.25;
 
 import {SuperchainERC20} from "./SuperchainERC20.sol";
-import {Ownable} from "solady/src/auth/Ownable.sol";
 
-contract CrosschainFlashLoanToken is SuperchainERC20 {
+contract XChainERC20Mock is SuperchainERC20 {
     string private constant _name = "XChainFlashLoan";
     string private constant _symbol = "CXL";
     uint8 private constant _decimals = 18;

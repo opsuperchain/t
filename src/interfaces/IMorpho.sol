@@ -265,11 +265,16 @@ interface IMorphoBase {
     /// @dev Warning: Not ERC-3156 compliant but compatibility is easily reached:
     /// - `flashFee` is zero.
     /// - `maxFlashLoan` is the token's balance of this contract.
-    /// - The receiver of `assets` is the caller.
+    /// - The receiver of `assets` is the borrower.
+    /// @param borrower The address that will receive the flash loaned assets.
     /// @param token The token to flash loan.
     /// @param assets The amount of assets to flash loan.
     /// @param data Arbitrary data to pass to the `onMorphoFlashLoan` callback.
-    function flashLoan(address token, uint256 assets, bytes calldata data) external;
+    function flashLoan(address borrower, address token, uint256 assets, bytes calldata data) external;
+
+    function initiateCrosschainFlashLoan(address token, uint256 destinationChain, uint256 assets, bytes calldata data)
+        external
+        payable;
 
     /// @notice Sets the authorization for `authorized` to manage `msg.sender`'s positions.
     /// @param authorized The authorized address.
@@ -349,4 +354,18 @@ interface IMorpho is IMorphoBase {
     /// @dev This mapping is not used in Morpho. It is there to enable reducing the cost associated to calldata on layer
     /// 2s by creating a wrapper contract with functions that take `id` as input instead of `marketParams`.
     function idToMarketParams(Id id) external view returns (MarketParams memory);
+}
+
+interface IRemoteXChainMorpho {
+    function await(uint256, address, address, uint256, bytes memory) external returns (Promise);
+}
+
+interface Promise {
+    function then(function(uint256, address, address, uint256, bytes memory) external) external;
+}
+
+interface IXChainMorpho {
+    function initiateCrosschainFlashLoan(address token, uint256 destinationChain, uint256 assets, bytes calldata data)
+        external
+        payable;
 }

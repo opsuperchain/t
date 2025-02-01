@@ -5,15 +5,15 @@ import {IERC20} from "./interfaces/IERC20.sol";
 import {IMorpho} from "../interfaces/IMorpho.sol";
 import {IMorphoFlashLoanCallback} from "../interfaces/IMorphoCallbacks.sol";
 
-contract FlashBorrowerMock is IMorphoFlashLoanCallback {
+contract FlashXChainBorrowerMock is IMorphoFlashLoanCallback {
     IMorpho private immutable MORPHO;
 
     constructor(IMorpho newMorpho) {
         MORPHO = newMorpho;
     }
 
-    function flashLoan(address token, uint256 assets, bytes calldata data) external {
-        MORPHO.flashLoan(address(this), token, assets, data);
+    function flashLoan(address token, uint256 destinationChain, uint256 assets, bytes calldata data) external payable {
+        MORPHO.initiateCrosschainFlashLoan{value: msg.value}(token, destinationChain, assets, data);
     }
 
     function onMorphoFlashLoan(uint256 assets, bytes calldata data) external {

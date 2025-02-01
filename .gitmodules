@@ -4,3 +4,12 @@
 [submodule "lib/halmos-cheatcodes"]
 	path = lib/halmos-cheatcodes
 	url = https://github.com/a16z/halmos-cheatcodes.git
+[submodule "lib/superchain-async"]
+	path = lib/superchain-async
+	url = https://github.com/ben-chain/superchain-async.git
+[submodule "lib/interop-lib"]
+	path = lib/interop-lib
+	url = https://github.com/ethereum-optimism/interop-lib
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts

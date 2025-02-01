@@ -9,7 +9,9 @@ import {
     Position,
     Market,
     Authorization,
-    Signature
+    Signature,
+    IRemoteXChainMorpho,
+    Promise
 } from "./interfaces/IMorpho.sol";
 import {
     IMorphoLiquidateCallback,
@@ -30,12 +32,15 @@ import {MathLib, WAD} from "./libraries/MathLib.sol";
 import {SharesMathLib} from "./libraries/SharesMathLib.sol";
 import {MarketParamsLib} from "./libraries/MarketParamsLib.sol";
 import {SafeTransferLib} from "./libraries/SafeTransferLib.sol";
+import {AsyncEnabled} from "lib/superchain-async/src/AsyncEnabled.sol";
+import {IL2ToL2CrossDomainMessenger} from "interop-lib/interfaces/IL2ToL2CrossDomainMessenger.sol";
+import {ISuperchainTokenBridge} from "interop-lib/interfaces/ISuperchainTokenBridge.sol";
 
 /// @title Morpho
 /// @author Morpho Labs
 /// @custom:contact security@morpho.org
 /// @notice The Morpho contract.
-contract Morpho is IMorphoStaticTyping {
+contract Morpho is AsyncEnabled, IMorphoStaticTyping {
     using MathLib for uint128;
     using MathLib for uint256;
     using UtilsLib for uint256;
@@ -419,16 +424,72 @@ contract Morpho is IMorphoStaticTyping {
     /* FLASH LOANS */
 
     /// @inheritdoc IMorphoBase
-    function flashLoan(address token, uint256 assets, bytes calldata data) external {
+    function flashLoan(address borrower, address token, uint256 assets, bytes calldata data) external {
         require(assets != 0, ErrorsLib.ZERO_ASSETS);
 
-        emit EventsLib.FlashLoan(msg.sender, token, assets);
+        emit EventsLib.FlashLoan(borrower, token, assets);
 
-        IERC20(token).safeTransfer(msg.sender, assets);
+        IERC20(token).safeTransfer(borrower, assets);
 
-        IMorphoFlashLoanCallback(msg.sender).onMorphoFlashLoan(assets, data);
+        IMorphoFlashLoanCallback(borrower).onMorphoFlashLoan(assets, data);
 
-        IERC20(token).safeTransferFrom(msg.sender, address(this), assets);
+        IERC20(token).safeTransferFrom(borrower, address(this), assets);
+    }
+
+    function xChainFlashLoan(uint256 sourceChain, address borrower, address token, uint256 assets, bytes calldata data)
+        external
+    {
+        this.flashLoan(borrower, token, assets, data);
+
+        // Send tokens back to this contract on source chain
+        ISuperchainTokenBridge bridge = ISuperchainTokenBridge(0x4200000000000000000000000000000000000028);
+        bridge.sendERC20(
+            address(token),
+            address(this), // Send back to this contract on source chain
+            assets,
+            sourceChain
+        );
+    }
+
+    function initiateCrosschainFlashLoan(address token, uint256 destinationChain, uint256 assets, bytes calldata data)
+        external
+        payable
+    {
+        uint256 flashLoanFee = 0.0001 ether;
+        require(msg.value >= flashLoanFee, "Insufficient fee");
+
+        ISuperchainTokenBridge bridge = ISuperchainTokenBridge(0x4200000000000000000000000000000000000028);
+
+        // Send tokens to Morpho on destination chain
+        bridge.sendERC20(address(token), address(this), assets, destinationChain);
+
+        IRemoteXChainMorpho remote = IRemoteXChainMorpho(getAsyncProxy(address(this), destinationChain));
+        Promise initiateFlashLoanPromise = remote.await(destinationChain, msg.sender, token, assets, data);
+        // send message to the destination chain to execute the flash loan
+        initiateFlashLoanPromise.then(this.executeFlashLoanOnRemoteChain);
+    }
+
+    function await(uint256 destinationChain, address borrower, address token, uint256 assets, bytes memory data)
+        external
+        view
+        async
+        returns (uint256, address, address, uint256, bytes memory)
+    {
+        return (destinationChain, borrower, token, assets, data);
+    }
+
+    function executeFlashLoanOnRemoteChain(
+        uint256 destinationChain,
+        address borrower,
+        address token,
+        uint256 assets,
+        bytes memory data
+    ) external asyncCallback {
+        IL2ToL2CrossDomainMessenger(0x4200000000000000000000000000000000000023).sendMessage(
+            destinationChain,
+            address(this),
+            abi.encodeWithSelector(this.xChainFlashLoan.selector, block.chainid, borrower, token, assets, data)
+        );
     }
 
     /* AUTHORIZATION */

@@ -6102,10 +6102,10 @@ strip-json-comments@3.1.1:
   resolved "https://registry.yarnpkg.com/strip-json-comments/-/strip-json-comments-3.1.1.tgz#31f1281b3832630434831c310c01cccda8cbe006"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-superchain-starter@^0.0.7:
-  version "0.0.7"
-  resolved "https://registry.yarnpkg.com/superchain-starter/-/superchain-starter-0.0.7.tgz#d289fedcca2ed239cc4cc77095b8f372ce809b2a"
-  integrity sha512-lI74ZKujcOjg0OEDngnCkscU5cYp4EsW+ZYlGaO5KM1gyKPhC3JspcSPNOdb3hWA6jDNc+cBiV4thhswEmSxew==
+superchain-starter@^0.0.8:
+  version "0.0.8"
+  resolved "https://registry.yarnpkg.com/superchain-starter/-/superchain-starter-0.0.8.tgz#5b8728ef38084fd4393d3b59d7a2775ca9e892b0"
+  integrity sha512-v/MIDmBHKAnqXDao123CbLBNr6SzoUelWpgN5CPhCFn/ImipZqi45wDm7kEkhUmD9yztqF2bdbechTy4rX/5FQ==
   dependencies:
     viem "^2.0.0"
 

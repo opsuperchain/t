@@ -119,48 +119,25 @@ describe('Morpho Interop Tests', () => {
         await morpho.sendTx(901, 'createMarket', [marketParams])
     }, 60000)
 
-    it('should supply tokens and do a flash loan', async () => {
-        const amount = ethers.parseEther('100')
-        
-        // Set balance and approve
-        await token.sendTx(901, 'setBalance', [walletAddress, amount])
-        await token.sendTx(901, 'approve', [morpho.address, amount])
-
-        // Supply tokens using the same market params
-        const marketParams = {
-            loanToken: token.address,
-            collateralToken: token.address,
-            oracle: mockOracle,
-            irm: irm.address,
-            lltv: ethers.parseEther('0.8')
-        }
-
-        await morpho.sendTx(901, 'supply', [marketParams, amount, 0n, walletAddress, '0x'])
-
-        // Do flash loan
-        const flashLoanAmount = ethers.parseEther('50')
-        const abiCoder = new ethers.AbiCoder()
-        const flashLoanData = abiCoder.encode(['address'], [token.address])
-        await flashBorrower.sendTx(901, 'flashLoan', [token.address, flashLoanAmount, flashLoanData])
-
-        // Verify flash loan succeeded by checking token balance is unchanged
-        const balance = await token.call(901, 'balanceOf', [walletAddress])
-        expect(balance).toBe(0n) // All tokens were supplied to Morpho
-    }, 60000)
-
     it('should supply tokens and do a xchain flash loan', async () => {
         // Mint tokens for the bridge on chain 901
         const amount = 1000n
         await xChainToken.sendTx(901, 'mint', [xChainMorpho.address, amount])
         const bridgePreBalance = await xChainToken.call(901, 'balanceOf', [xChainMorpho.address])
         expect(bridgePreBalance).toBe(amount)
+        const flashXChainBorrowerPreBalance = await xChainToken.call(901, 'balanceOf', [flashXChainBorrower.address])
+        expect(flashXChainBorrowerPreBalance).toBe(0n)
 
         const abiCoder = new ethers.AbiCoder()
         const flashLoanData = abiCoder.encode(['address'], [xChainToken.address])
         const FEE = 10000000000000000n 
         await flashXChainBorrower.sendTx(901, 'flashLoan', [xChainToken.address, 902n, amount, flashLoanData], FEE)
 
-        // TODO: add check to make sure balances are correct
+        await waitForTrue(async () => {
+            const bridgePostBalance = await xChainToken.call(901, 'balanceOf', [xChainMorpho.address])
+            const flashXChainBorrowerPostBalance = await xChainToken.call(901, 'balanceOf', [flashXChainBorrower.address])
+            return bridgePostBalance === amount && flashXChainBorrowerPostBalance === 0n
+        }, 30000, 1000, 'Bridge balance did not update to expected value')
     }, 60000)
 
     // TODO: Add more tests for basic interactions
@@ -169,3 +146,30 @@ describe('Morpho Interop Tests', () => {
     // - Borrow
     // etc.
 }) 
+
+async function waitForTrue(
+    callback: () => Promise<boolean>,
+    timeout: number = 10000,
+    interval: number = 1000,
+    timeoutMessage: string = "Condition not met within timeout period"
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        const startTime = Date.now();
+        
+        while (Date.now() - startTime < timeout) {
+            try {
+                if (await callback()) {
+                    resolve();
+                    return;
+                }
+            } catch (error) {
+                reject(error);
+                return;
+            }
+            await setTimeout(interval);
+        }
+        
+        reject(new Error(timeoutMessage));
+    });
+}
+

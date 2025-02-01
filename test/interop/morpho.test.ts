@@ -1,15 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SuperContract, SuperWallet as Wallet, getSuperContract } from 'superchain-starter'
-import { encodeFunctionData } from 'viem'
 import { ethers } from 'ethers'
 import { config } from './config'
 import { MORPHO_ABI, MORPHO_BYTECODE } from './contracts'
 import ERC20MockArtifact from '../../out/ERC20Mock.sol/ERC20Mock.json'
 import XChainERC20MockArtifact from '../../out/XChainERC20Mock.sol/XChainERC20Mock.json'
-import FlashBorrowerMockArtifact from '../../out/FlashBorrowerMock.sol/FlashBorrowerMock.json'
 import FlashXChainBorrowerMockArtifact from '../../out/FlashXChainBorrowerMock.sol/FlashXChainBorrowerMock.json'
 import IrmMockArtifact from '../../out/IrmMock.sol/IrmMock.json'
-import XChainMorphoArtifact from '../../out/XChainMorpho.sol/XChainMorpho.json'
 const toHexString = (char: string, length: number = 40): `0x${string}` => 
     `0x${char.repeat(length)}` as `0x${string}`
 import { setTimeout } from 'timers/promises'
@@ -18,11 +15,9 @@ describe('Morpho Interop Tests', () => {
     const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
     const wallet = new Wallet(PRIVATE_KEY)
     let morpho: SuperContract
-    let xChainMorpho: SuperContract
     let token: SuperContract
     let xChainToken: SuperContract
     let flashBorrower: SuperContract
-    let flashXChainBorrower: SuperContract
     let irm: SuperContract
     let walletAddress: string
     const mockOracle = toHexString('2')
@@ -42,13 +37,6 @@ describe('Morpho Interop Tests', () => {
             [walletAddress] // Pass wallet address as newOwner
         )
 
-        xChainMorpho = getSuperContract(
-            config,
-            wallet,
-            XChainMorphoArtifact.abi,
-            XChainMorphoArtifact.bytecode.object as `0x${string}`,
-            [] // Pass wallet address as newOwner
-        )
 
         token = getSuperContract(
             config,
@@ -76,8 +64,7 @@ describe('Morpho Interop Tests', () => {
 
         // Deploy Morpho first since we need its address for FlashBorrower
         await morpho.deploy(901)
-        await xChainMorpho.deploy(901)
-        await xChainMorpho.deploy(902)
+        await morpho.deploy(902)
         await token.deploy(901)
         await xChainToken.deploy(901)
         await xChainToken.deploy(902)
@@ -87,20 +74,12 @@ describe('Morpho Interop Tests', () => {
         flashBorrower = getSuperContract(
             config,
             wallet,
-            FlashBorrowerMockArtifact.abi,
-            FlashBorrowerMockArtifact.bytecode.object as `0x${string}`,
-            [morpho.address]
-        )
-        flashXChainBorrower = getSuperContract(
-            config,
-            wallet,
             FlashXChainBorrowerMockArtifact.abi,
             FlashXChainBorrowerMockArtifact.bytecode.object as `0x${string}`,
-            [xChainMorpho.address]
+            [morpho.address]
         )
         await flashBorrower.deploy(901)
-        await flashXChainBorrower.deploy(901)
-        await flashXChainBorrower.deploy(902)
+        await flashBorrower.deploy(902)
 
         // Enable IRM and LLTV for market creation
         await morpho.sendTx(901, 'enableIrm', [irm.address])
@@ -122,20 +101,20 @@ describe('Morpho Interop Tests', () => {
     it('should supply tokens and do a xchain flash loan', async () => {
         // Mint tokens for the bridge on chain 901
         const amount = 1000n
-        await xChainToken.sendTx(901, 'mint', [xChainMorpho.address, amount])
-        const bridgePreBalance = await xChainToken.call(901, 'balanceOf', [xChainMorpho.address])
+        await xChainToken.sendTx(901, 'mint', [morpho.address, amount])
+        const bridgePreBalance = await xChainToken.call(901, 'balanceOf', [morpho.address])
         expect(bridgePreBalance).toBe(amount)
-        const flashXChainBorrowerPreBalance = await xChainToken.call(901, 'balanceOf', [flashXChainBorrower.address])
+        const flashXChainBorrowerPreBalance = await xChainToken.call(901, 'balanceOf', [flashBorrower.address])
         expect(flashXChainBorrowerPreBalance).toBe(0n)
 
         const abiCoder = new ethers.AbiCoder()
         const flashLoanData = abiCoder.encode(['address'], [xChainToken.address])
         const FEE = 10000000000000000n 
-        await flashXChainBorrower.sendTx(901, 'flashLoan', [xChainToken.address, 902n, amount, flashLoanData], FEE)
+        await flashBorrower.sendTx(901, 'flashLoan', [xChainToken.address, 902n, amount, flashLoanData], FEE)
 
         await waitForTrue(async () => {
-            const bridgePostBalance = await xChainToken.call(901, 'balanceOf', [xChainMorpho.address])
-            const flashXChainBorrowerPostBalance = await xChainToken.call(901, 'balanceOf', [flashXChainBorrower.address])
+            const bridgePostBalance = await xChainToken.call(901, 'balanceOf', [morpho.address])
+            const flashXChainBorrowerPostBalance = await xChainToken.call(901, 'balanceOf', [flashBorrower.address])
             return bridgePostBalance === amount && flashXChainBorrowerPostBalance === 0n
         }, 30000, 1000, 'Bridge balance did not update to expected value')
     }, 60000)

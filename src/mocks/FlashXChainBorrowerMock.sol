@@ -2,13 +2,13 @@
 pragma solidity ^0.8.0;
 
 import {IERC20} from "./interfaces/IERC20.sol";
-import {IXChainMorpho} from "../XChainMorpho.sol";
+import {IMorpho} from "../interfaces/IMorpho.sol";
 import {IMorphoFlashLoanCallback} from "../interfaces/IMorphoCallbacks.sol";
 
 contract FlashXChainBorrowerMock is IMorphoFlashLoanCallback {
-    IXChainMorpho private immutable MORPHO;
+    IMorpho private immutable MORPHO;
 
-    constructor(IXChainMorpho newMorpho) {
+    constructor(IMorpho newMorpho) {
         MORPHO = newMorpho;
     }
 

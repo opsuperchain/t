@@ -4,19 +4,25 @@ pragma solidity ^0.8.25;
 import {SuperchainERC20} from "./SuperchainERC20.sol";
 
 contract XChainERC20Mock is SuperchainERC20 {
-    string private constant _name = "XChainFlashLoan";
-    string private constant _symbol = "CXL";
-    uint8 private constant _decimals = 18;
+    string private _name;
+    string private _symbol;
+    uint8 private _decimals;
 
-    function name() public pure override returns (string memory) {
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
+        _name = name_;
+        _symbol = symbol_;
+        _decimals = decimals_;
+    }
+
+    function name() public view override returns (string memory) {
         return _name;
     }
 
-    function symbol() public pure override returns (string memory) {
+    function symbol() public view override returns (string memory) {
         return _symbol;
     }
 
-    function decimals() public pure override returns (uint8) {
+    function decimals() public view override returns (uint8) {
         return _decimals;
     }
 

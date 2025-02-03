@@ -19,16 +19,16 @@ contract FlashXChainBorrowerMock is IMorphoFlashLoanCallback {
 
     function onMorphoFlashLoan(uint256 assets, bytes calldata data) external {
         // Decode the exchange addresses and token from the callback data
-        (address sourceExchange, address destExchange, address token0, address token1) =
+        (address exchange1Addr, address exchange2Addr, address token0, address token1) =
             abi.decode(data, (address, address, address, address));
 
         // Get exchange contracts
-        ExchangeMock exchange1 = ExchangeMock(sourceExchange);
-        ExchangeMock exchange2 = ExchangeMock(destExchange);
+        ExchangeMock exchange1 = ExchangeMock(exchange1Addr);
+        ExchangeMock exchange2 = ExchangeMock(exchange2Addr);
 
         // // Approve exchanges to spend our tokens
-        IERC20(token0).approve(sourceExchange, assets);
-        IERC20(token1).approve(destExchange, type(uint256).max);
+        IERC20(token0).approve(exchange1Addr, assets);
+        IERC20(token1).approve(exchange2Addr, type(uint256).max);
 
         // Perform arbitrage:
         // 1. Swap token0 for token1 on first exchange

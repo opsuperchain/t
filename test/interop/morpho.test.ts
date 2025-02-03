@@ -3,9 +3,9 @@ import { SuperContract, SuperWallet as Wallet, getSuperContract } from 'supercha
 import { ethers } from 'ethers'
 import { config } from './config'
 import { MORPHO_ABI, MORPHO_BYTECODE } from './contracts'
-import ERC20MockArtifact from '../../out/ERC20Mock.sol/ERC20Mock.json'
 import XChainERC20MockArtifact from '../../out/XChainERC20Mock.sol/XChainERC20Mock.json'
 import FlashXChainBorrowerMockArtifact from '../../out/FlashXChainBorrowerMock.sol/FlashXChainBorrowerMock.json'
+import ExchangeMockArtifact from '../../out/ExchangeMock.sol/ExchangeMock.json'
 import IrmMockArtifact from '../../out/IrmMock.sol/IrmMock.json'
 const toHexString = (char: string, length: number = 40): `0x${string}` => 
     `0x${char.repeat(length)}` as `0x${string}`
@@ -15,8 +15,10 @@ describe('Morpho Interop Tests', () => {
     const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
     const wallet = new Wallet(PRIVATE_KEY)
     let morpho: SuperContract
-    let token: SuperContract
-    let xChainToken: SuperContract
+    let token0: SuperContract
+    let token1: SuperContract
+    let exchange1: SuperContract
+    let exchange2: SuperContract
     let flashBorrower: SuperContract
     let irm: SuperContract
     let walletAddress: string
@@ -34,24 +36,23 @@ describe('Morpho Interop Tests', () => {
             wallet,
             MORPHO_ABI,
             MORPHO_BYTECODE,
-            [walletAddress] // Pass wallet address as newOwner
+            [walletAddress]
         )
 
-
-        token = getSuperContract(
-            config,
-            wallet,
-            ERC20MockArtifact.abi,
-            ERC20MockArtifact.bytecode.object as `0x${string}`,
-            []
-        )
-
-        xChainToken = getSuperContract(
+        token0 = getSuperContract(
             config,
             wallet,
             XChainERC20MockArtifact.abi,
             XChainERC20MockArtifact.bytecode.object as `0x${string}`,
-            []
+            ["XChainToken0", "X0", 18]
+        )
+
+        token1 = getSuperContract(
+            config,
+            wallet,
+            XChainERC20MockArtifact.abi,
+            XChainERC20MockArtifact.bytecode.object as `0x${string}`,
+            ["XChainToken1", "X1", 18]
         )
 
         irm = getSuperContract(
@@ -62,15 +63,37 @@ describe('Morpho Interop Tests', () => {
             []
         )
 
-        // Deploy Morpho first since we need its address for FlashBorrower
+        // Deploy base contracts
         await morpho.deploy(901)
         await morpho.deploy(902)
-        await token.deploy(901)
-        await xChainToken.deploy(901)
-        await xChainToken.deploy(902)
+        await token0.deploy(901)
+        await token0.deploy(902)
+        await token1.deploy(901)
+        await token1.deploy(902)
         await irm.deploy(901)
         await irm.deploy(902)
 
+        // Create and deploy exchanges with different rates
+        exchange1 = getSuperContract(
+            config,
+            wallet,
+            ExchangeMockArtifact.abi,
+            ExchangeMockArtifact.bytecode.object as `0x${string}`,
+            [token0.address, token1.address, 10000] // 1:1 rate
+        )
+
+        exchange2 = getSuperContract(
+            config,
+            wallet,
+            ExchangeMockArtifact.abi,
+            ExchangeMockArtifact.bytecode.object as `0x${string}`,
+            [token0.address, token1.address, 9000] // .9:1 rate
+        )
+
+        await exchange1.deploy(902)
+        await exchange2.deploy(902)
+
+        // Deploy flash borrower
         flashBorrower = getSuperContract(
             config,
             wallet,
@@ -81,14 +104,23 @@ describe('Morpho Interop Tests', () => {
         await flashBorrower.deploy(901)
         await flashBorrower.deploy(902)
 
+        // Setup exchange liquidity
+        const INITIAL_LIQUIDITY = ethers.parseEther('1000')
+        
+        // Mint and approve tokens for exchanges
+        await token0.sendTx(902, 'mint', [exchange1.address, INITIAL_LIQUIDITY])
+        await token1.sendTx(902, 'mint', [exchange1.address, INITIAL_LIQUIDITY])
+        await token0.sendTx(902, 'mint', [exchange2.address, INITIAL_LIQUIDITY])
+        await token1.sendTx(902, 'mint', [exchange2.address, INITIAL_LIQUIDITY])
+
         // Enable IRM and LLTV for market creation
         await morpho.sendTx(901, 'enableIrm', [irm.address])
         await morpho.sendTx(901, 'enableLltv', [ethers.parseEther('0.8')])
 
         // Create market params
         const marketParams = {
-            loanToken: token.address,
-            collateralToken: token.address, // Using same token as collateral
+            loanToken: token0.address,
+            collateralToken: token0.address,
             oracle: mockOracle,
             irm: irm.address,
             lltv: ethers.parseEther('0.8')
@@ -98,33 +130,53 @@ describe('Morpho Interop Tests', () => {
         await morpho.sendTx(901, 'createMarket', [marketParams])
     }, 60000)
 
-    it('should supply tokens and do a xchain flash loan', async () => {
-        // Mint tokens for the bridge on chain 901
-        const amount = 1000n
-        await xChainToken.sendTx(901, 'mint', [morpho.address, amount])
-        const bridgePreBalance = await xChainToken.call(901, 'balanceOf', [morpho.address])
-        expect(bridgePreBalance).toBe(amount)
-        const flashXChainBorrowerPreBalance = await xChainToken.call(901, 'balanceOf', [flashBorrower.address])
-        expect(flashXChainBorrowerPreBalance).toBe(0n)
+    it('should perform cross-chain arbitrage using flash loan', async () => {
+        const FLASH_LOAN_AMOUNT = ethers.parseEther('100')
+        
+        // Mint tokens for Morpho to enable flash loans
+        await token0.sendTx(901, 'mint', [morpho.address, FLASH_LOAN_AMOUNT])
+        const morphoInitialBalance = await token0.call(901, 'balanceOf', [morpho.address])
+        
+        // Get initial balances
+        const borrowerInitialBalance = await token0.call(902, 'balanceOf', [flashBorrower.address])
+        expect(borrowerInitialBalance).toBe(0n)
 
+        // Encode flash loan data with exchange addresses and tokens
         const abiCoder = new ethers.AbiCoder()
-        const flashLoanData = abiCoder.encode(['address'], [xChainToken.address])
-        const FEE = 10000000000000000n 
-        await flashBorrower.sendTx(901, 'flashLoan', [xChainToken.address, 902n, amount, flashLoanData], FEE)
+        const flashLoanData = abiCoder.encode(
+            ['address', 'address', 'address', 'address'],
+            [exchange1.address, exchange2.address, token0.address, token1.address]
+        )
 
+        // Execute flash loan with arbitrage
+        const FEE = ethers.parseEther('0.0001')
+        await flashBorrower.sendTx(
+            901,
+            'flashLoan',
+            [token0.address, 902n, FLASH_LOAN_AMOUNT, flashLoanData],
+            FEE
+        )
+
+        // Wait for the cross-chain transaction to complete
         await waitForTrue(async () => {
-            const bridgePostBalance = await xChainToken.call(901, 'balanceOf', [morpho.address])
-            const flashXChainBorrowerPostBalance = await xChainToken.call(901, 'balanceOf', [flashBorrower.address])
-            return bridgePostBalance === amount && flashXChainBorrowerPostBalance === 0n
-        }, 30000, 1000, 'Bridge balance did not update to expected value')
-    }, 60000)
+            const borrowerFinalBalance = await token0.call(902, 'balanceOf', [flashBorrower.address])
+            // Should have made a profit
+            return borrowerFinalBalance > borrowerInitialBalance
+        }, 30000, 1000, 'Arbitrage did not complete successfully')
 
-    // TODO: Add more tests for basic interactions
-    // - Market creation
-    // - Supply
-    // - Borrow
-    // etc.
-}) 
+        // Verify borrower made a profit off arbitrage
+        const borrowerFinalBalance = await token0.call(902, 'balanceOf', [flashBorrower.address])
+        console.log('Profit made:', ethers.formatEther(borrowerFinalBalance))
+        expect(borrowerFinalBalance).toBeGreaterThan(0n)
+
+        // Wait for cross-chain transaction of sending tokens back to Morpho on source chain
+        await waitForTrue(async () => {
+            // Verify Morpho's balance is unchanged
+            const morphoFinalBalance = await token0.call(901, 'balanceOf', [morpho.address])
+            return morphoFinalBalance === morphoInitialBalance
+        }, 30000, 1000, 'Morpho\'s balance is not unchanged')
+    }, 60000)
+})
 
 async function waitForTrue(
     callback: () => Promise<boolean>,
